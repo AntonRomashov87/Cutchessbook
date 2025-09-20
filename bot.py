@@ -8,7 +8,6 @@ import re
 import requests
 import fitz  # PyMuPDF
 import schedule
-from djvu2pdf import convert as djvu_to_pdf
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from flask import Flask, request
@@ -30,21 +29,14 @@ app = Flask(__name__)
 # =======================
 # ===== Змінні ==========
 # =======================
-BOT_TOKEN = "8496899125:AAEVVmjfr9MOIET9E5FbkPcutnKtgaJOZAc"
-CHAT_ID = "-100ВАШ_CHAT_ID"
-TRIGGER_SECRET = "МІЙ_СЕКРЕТ"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")  # наприклад "-1001234567890"
+TRIGGER_SECRET = os.getenv("TRIGGER_SECRET", "mysecret")
 
-PDF_URL = "https://drive.google.com/file/d/1Wez3N0d_onhKk2s6mGf6dGoAd0lrG3h9/view"
-DJVU_URL = "https://drive.google.com/uc?export=download&id=DJVU_FILE_ID"
-
+PDF_URL = os.getenv("PDF_URL")
 PDF_FILE = "chess_book.pdf"
-DJVU_FILE = "chess_book.djvu"
-
 PDF_OUTPUT_FOLDER = "pdf_pages"
-DJVU_OUTPUT_FOLDER = "djvu_pages"
-
 PDF_INDEX_FILE = "last_pdf_page.txt"
-DJVU_INDEX_FILE = "last_djvu_page.txt"
 
 PUZZLES_URL = "https://raw.githubusercontent.com/AntonRomashov87/Chess_puzzles/main/puzzles.json"
 
@@ -53,7 +45,6 @@ PTB_APP = None
 # =======================
 # ===== Функції =========
 # =======================
-
 def escape_markdown_v2(text: str) -> str:
     escape_chars = r"[_*\[\]()~`>#\+\-=|{}.!]"
     return re.sub(f'({escape_chars})', r'\\\1', text)
@@ -150,7 +141,7 @@ async def send_puzzle_now(chat_id: str):
         logger.error(f"Не вдалося відправити задачу в чат {chat_id}: {e}")
 
 # =======================
-# ===== PDF / DJVU ======
+# ===== PDF ============
 # =======================
 async def download_and_convert_pdf():
     os.makedirs(PDF_OUTPUT_FOLDER, exist_ok=True)
@@ -167,23 +158,6 @@ async def download_and_convert_pdf():
             pix.save(f"{PDF_OUTPUT_FOLDER}/page_{i+1}.png")
         logger.info(f"✅ Конвертовано {len(doc)} сторінок PDF")
 
-async def download_and_convert_djvu():
-    os.makedirs(DJVU_OUTPUT_FOLDER, exist_ok=True)
-    if not os.path.exists(DJVU_FILE):
-        r = requests.get(DJVU_URL)
-        with open(DJVU_FILE, "wb") as f:
-            f.write(r.content)
-        logger.info("✅ DJVU завантажено")
-    pdf_temp = "temp_djvu.pdf"
-    djvu_to_pdf(DJVU_FILE, pdf_temp)
-    doc = fitz.open(pdf_temp)
-    for i in range(len(doc)):
-        page = doc[i]
-        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-        pix.save(f"{DJVU_OUTPUT_FOLDER}/page_{i+1}.png")
-    os.remove(pdf_temp)
-    logger.info(f"✅ Конвертовано {len(doc)} сторінок DJVU")
-
 def get_last_index(file_name):
     if os.path.exists(file_name):
         with open(file_name, "r") as f:
@@ -194,22 +168,22 @@ def save_last_index(file_name, i):
     with open(file_name, "w") as f:
         f.write(str(i))
 
-async def send_next_page(chat_id: str, folder: str, index_file: str):
+async def send_next_page(chat_id: str):
     if not PTB_APP:
         logger.error("Бот не ініціалізований")
         return
-    pages = sorted(os.listdir(folder))
+    pages = sorted(os.listdir(PDF_OUTPUT_FOLDER))
     if not pages:
         logger.error("Сторінки не знайдено")
         return
-    last = get_last_index(index_file)
+    last = get_last_index(PDF_INDEX_FILE)
     next_index = last + 1
     if next_index < len(pages):
-        file_path = os.path.join(folder, pages[next_index])
+        file_path = os.path.join(PDF_OUTPUT_FOLDER, pages[next_index])
         caption = f"📖 Сторінка {next_index+1}"
         try:
             await PTB_APP.bot.send_photo(chat_id=chat_id, photo=open(file_path, "rb"), caption=caption)
-            save_last_index(index_file, next_index)
+            save_last_index(PDF_INDEX_FILE, next_index)
             logger.info(f"✅ Опубліковано сторінку {next_index+1}")
         except Exception as e:
             logger.error(f"Не вдалося відправити сторінку: {e}")
@@ -220,14 +194,9 @@ async def send_next_page(chat_id: str, folder: str, index_file: str):
 # ===== Планувальник =====
 # =======================
 def schedule_pages():
-    # PDF
-    schedule.every().tuesday.at("10:00").do(lambda: asyncio.create_task(send_next_page(CHAT_ID, PDF_OUTPUT_FOLDER, PDF_INDEX_FILE)))
-    schedule.every().thursday.at("10:00").do(lambda: asyncio.create_task(send_next_page(CHAT_ID, PDF_OUTPUT_FOLDER, PDF_INDEX_FILE)))
-    schedule.every().saturday.at("10:00").do(lambda: asyncio.create_task(send_next_page(CHAT_ID, PDF_OUTPUT_FOLDER, PDF_INDEX_FILE)))
-    # DJVU
-    schedule.every().tuesday.at("10:00").do(lambda: asyncio.create_task(send_next_page(CHAT_ID, DJVU_OUTPUT_FOLDER, DJVU_INDEX_FILE)))
-    schedule.every().thursday.at("10:00").do(lambda: asyncio.create_task(send_next_page(CHAT_ID, DJVU_OUTPUT_FOLDER, DJVU_INDEX_FILE)))
-    schedule.every().saturday.at("10:00").do(lambda: asyncio.create_task(send_next_page(CHAT_ID, DJVU_OUTPUT_FOLDER, DJVU_INDEX_FILE)))
+    schedule.every().tuesday.at("10:00").do(lambda: asyncio.create_task(send_next_page(CHAT_ID)))
+    schedule.every().thursday.at("10:00").do(lambda: asyncio.create_task(send_next_page(CHAT_ID)))
+    schedule.every().saturday.at("10:00").do(lambda: asyncio.create_task(send_next_page(CHAT_ID)))
     logger.info("⏳ Планувальник сторінок запущено")
 
 async def run_schedule():
@@ -260,8 +229,7 @@ async def trigger_puzzle_sending(secret: str):
     if secret != TRIGGER_SECRET:
         return "Invalid secret", 403
     asyncio.create_task(send_puzzle_now(CHAT_ID))
-    asyncio.create_task(send_next_page(CHAT_ID, PDF_OUTPUT_FOLDER, PDF_INDEX_FILE))
-    asyncio.create_task(send_next_page(CHAT_ID, DJVU_OUTPUT_FOLDER, DJVU_INDEX_FILE))
+    asyncio.create_task(send_next_page(CHAT_ID))
     logger.info("Ручна відправка сторінки та задачі активована")
     return "Triggered", 200
 
@@ -277,9 +245,9 @@ async def setup_bot():
     PTB_APP.add_handler(CommandHandler("start", start_command))
     PTB_APP.add_handler(CallbackQueryHandler(button_handler))
     await download_and_convert_pdf()
-    await download_and_convert_djvu()
     schedule_pages()
     asyncio.create_task(run_schedule())
+
     # Вебхук
     webhook_url = os.getenv("PUBLIC_URL")
     if webhook_url:
