@@ -30,11 +30,11 @@ app = Flask(__name__)
 # =======================
 # ===== Змінні ==========
 # =======================
-BOT_TOKEN = "ТУТ_ВАШ_BOT_TOKEN"
+BOT_TOKEN = "8496899125:AAEVVmjfr9MOIET9E5FbkPcutnKtgaJOZAc"
 CHAT_ID = "-100ВАШ_CHAT_ID"
 TRIGGER_SECRET = "МІЙ_СЕКРЕТ"
 
-PDF_URL = "https://drive.google.com/uc?export=download&id=PDF_FILE_ID"
+PDF_URL = "https://drive.google.com/file/d/1Wez3N0d_onhKk2s6mGf6dGoAd0lrG3h9/view"
 DJVU_URL = "https://drive.google.com/uc?export=download&id=DJVU_FILE_ID"
 
 PDF_FILE = "chess_book.pdf"
