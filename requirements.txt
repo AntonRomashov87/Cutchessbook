@@ -4,4 +4,3 @@ aiohttp
 requests
 PyMuPDF
 schedule
-djvu2pdf
