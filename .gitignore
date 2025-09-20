@@ -1,0 +1,8 @@
+*.pdf
+*.djvu
+pdf_pages/
+djvu_pages/
+last_pdf_page.txt
+last_djvu_page.txt
+__pycache__/
+.env
